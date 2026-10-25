@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AETHER FM // 48KHZ CLUB DJ ENGINE</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='8' fill='%230A0A0A'/><rect x='3' y='3' width='58' height='58' rx='6' fill='none' stroke='%2300E5FF' stroke-width='3'/><path d='M14 20H30V25H19V30H28V35H19V44H14V20Z' fill='%2300E5FF'/><path d='M33 20H38L42.5 31L47 20H52V44H47.5V29.5L43.5 39H41.5L37.5 29.5V44H33V20Z' fill='%23FAFAFA'/></svg>" />
+  <style>
+    :root {
+      --bg: #07090e;
+      --surface: #0e121a;
+      --surface-alt: #141b26;
+      --border: #1f2a3a;
+      --border-accent: #2e3e56;
+      --cyan: #00e5ff;
+      --cyan-dim: rgba(0, 229, 255, 0.12);
+      --yellow: #ffd600;
+      --pink: #ff2a85;
+      --purple: #8a2be2;
+      --green: #00e676;
+      --danger: #ff334b;
+      --text: #f0f4f8;
+      --muted: #8092a8;
+      --mono: 'JetBrains Mono', 'Cascadia Mono', 'Consolas', monospace;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 20px 28px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 22px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 22px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-mark {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+    }
+    .brand-title {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      color: var(--cyan);
+    }
+    .brand-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1.5px;
+      margin-top: 3px;
+    }
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 12px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .tag-cyan {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: var(--cyan-dim);
+    }
+    .led {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+    }
+    .btn {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 8px 16px;
+      background: var(--cyan);
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      filter: brightness(1.15);
+      box-shadow: 0 0 12px var(--cyan-dim);
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border-accent);
+      color: var(--text);
+    }
+    .btn-outline:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .btn-danger {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: rgba(255, 51, 75, 0.1);
+    }
+    .btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 10.5px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 22px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 20px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .panel-header .accent {
+      color: var(--cyan);
+    }
+    /* DECK DISPLAY */
+    .deck-wrap {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .cover-frame {
+      width: 130px;
+      height: 130px;
+      border-radius: 8px;
+      border: 2px solid var(--border-accent);
+      object-fit: cover;
+      background: #000;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      flex-shrink: 0;
+    }
+    .track-info {
+      flex: 1;
+      overflow: hidden;
+    }
+    .track-badge-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+    .sub-badge {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .badge-mood {
+      background: rgba(255, 42, 133, 0.15);
+      border: 1px solid var(--pink);
+      color: var(--pink);
+    }
+    .badge-key {
+      background: rgba(0, 229, 255, 0.15);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+    }
+    .badge-station {
+      background: rgba(255, 214, 0, 0.15);
+      border: 1px solid var(--yellow);
+      color: var(--yellow);
+    }
+    .track-title {
+      font-size: 19px;
+      font-weight: 800;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .track-artist {
+      font-size: 14px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 8px;
+    }
+    /* PROGRESS BAR */
+    .progress-section {
+      margin-bottom: 18px;
+    }
+    .bar-track {
+      width: 100%;
+      height: 6px;
+      background: var(--surface-alt);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--pink));
+      transition: width 0.3s linear;
+    }
+    .bar-threshold {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--yellow);
+      z-index: 2;
+    }
+    .time-readout {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 5px;
+    }
+    /* METERS */
+    .meters {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .meter-box {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .meter-rail {
+      flex: 1;
+      height: 8px;
+      background: var(--surface-alt);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .meter-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--yellow) 80%, var(--danger));
+      transition: width 0.08s ease;
+    }
+    /* DECK B STANDBY */
+    .deck-b-strip {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .deck-b-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+    .deck-b-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 2px;
+    }
+    /* STATION BUTTONS */
+    .station-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .station-card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .station-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+    .station-card.active {
+      border-color: var(--cyan);
+      background: var(--cyan-dim);
+      box-shadow: 0 0 14px rgba(0, 229, 255, 0.2);
+    }
+    .station-name {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #fff;
+    }
+    .station-sub {
+      font-size: 10.5px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    /* INPUTS & CATALOG */
+    input[type="text"] {
+      width: 100%;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      color: #fff;
+      font-family: var(--sans);
+      font-size: 12.5px;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: var(--cyan);
+    }
+    .catalog-box {
+      max-height: 380px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-alt);
+      margin-top: 10px;
+    }
+    .catalog-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .catalog-row:last-child { border-bottom: none; }
+    .catalog-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .cat-title { font-weight: 700; color: #fff; }
+    .cat-artist { color: var(--muted); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <svg class="logo-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="8" fill="#0A0A0A"/>
+        <rect x="2" y="2" width="60" height="60" rx="6" fill="none" stroke="#00E5FF" stroke-width="3"/>
+        <path d="M13 19H29V24H18V29.5H27V34.5H18V45H13V19Z" fill="#00E5FF"/>
+        <path d="M32 19H37.5L42 30.5L46.5 19H52V45H47.2V29L43 39H41L36.8 29V45H32V19Z" fill="#F5F5F5"/>
+      </svg>
+      <div>
+        <div class="brand-title">AETHER FM // CLUB DJ BROADCASTER</div>
+        <div class="brand-sub">48KHZ BEAT-GRID • CAMELOT HARMONIC MIXER</div>
+      </div>
+    </div>
+    <div class="status-strip">
+      <span class="tag tag-cyan"><span class="led"></span> ON AIR</span>
+      <span class="tag" id="uplinkBadge" onclick="copyUplink()" style="cursor:pointer;" title="Click to copy remote streaming URL">UPLINK // CONNECTING</span>
+      <span class="tag" id="listenerBadge">0 LISTENERS</span>
+      <button class="btn btn-outline btn-sm" id="monitorBtn" onclick="toggleMonitor()">MONITOR BROADCAST</button>
+      <audio id="monitorAudio" preload="none" style="display:none;"></audio>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT COLUMN: LIVE DECK A + STANDBY DECK B + 6 STATIONS -->
+    <div>
+      <!-- DECK A -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>DECK A // MASTER PLAYOUT</span>
+          <span class="accent" id="deckATelemetry">128 BPM • 8A • -14.0 LUFS</span>
+        </div>
+
+        <div class="deck-wrap">
+          <img id="nowCover" class="cover-frame" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='130' height='130'><rect width='100%' height='100%' fill='%23111'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' fill='%2300E5FF' font-family='monospace' font-weight='bold' font-size='22'>DJ</text></svg>" alt="Cover" />
+          <div class="track-info">
+            <div class="track-badge-row">
+              <span class="sub-badge badge-station" id="badgeStation">STATION</span>
+              <span class="sub-badge badge-mood" id="badgeMood">MOOD</span>
+              <span class="sub-badge badge-key" id="badgeKey">KEY: 8A</span>
+            </div>
+            <div class="track-title" id="nowTitle">INITIALIZING BROADCAST...</div>
+            <div class="track-artist" id="nowArtist">SELECTING FIRST TRACK</div>
+          </div>
+        </div>
+
+        <div class="progress-section">
+          <div class="bar-track">
+            <div class="bar-threshold" title="50% Skip Threshold: Skips before this line day-ban the track"></div>
+            <div class="bar-fill" id="progressFill"></div>
+          </div>
+          <div class="time-readout">
+            <span id="timeElapsed">0:00</span>
+            <span style="color:var(--yellow); font-size:9.5px;">50% SKIP PENALTY THRESHOLD</span>
+            <span id="timeDuration">0:00</span>
+          </div>
+        </div>
+
+        <div class="meters">
+          <div class="meter-box"><span>L</span><div class="meter-rail"><div class="meter-bar" id="vuL"></div></div></div>
+          <div class="meter-box"><span>R</span><div class="meter-rail"><div class="meter-bar" id="vuR"></div></div></div>
+        </div>
+
+        <!-- DECK B STANDBY -->
+        <div class="deck-b-strip">
+          <div>
+            <div class="deck-b-label">DECK B // CUED NEXT IN RAM (PHRASE-ALIGNED)</div>
+            <div class="deck-b-title" id="deckBTitle">LOADING NEXT CANDIDATE...</div>
+          </div>
+          <span class="tag tag-cyan" id="deckBStatus">READY</span>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <button class="btn" style="flex:1.5;" onclick="triggerSkip()">NEXT TRACK (DJ POWER-CUT)</button>
+          <button class="btn btn-outline" style="flex:1;" onclick="cycleStation()">CYCLE STATION</button>
+          <button class="btn btn-danger btn-sm" onclick="flagWrongSong()" title="Ban track and purge from cache">FLAG WRONG</button>
+        </div>
+      </div>
+
+      <!-- 6 DEDICATED GENRE STATIONS -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>GENRE BROADCAST STATIONS</span>
+          <span class="accent">CLICK TO TUNE</span>
+        </div>
+        <div class="station-grid" id="stationGrid"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: DIRECT REQUEST + 50% SKIP VAULT / DAY-BAN MANAGER + CATALOG -->
+    <div>
+      <!-- DIRECT REQUEST -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>DIRECT SONG REQUEST</span>
+          <span class="accent">STUDIO SEARCH</span>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="requestInput" placeholder="Enter song title or artist name..." onkeydown="if(event.key==='Enter') submitRequest(false)" />
+          <button class="btn btn-outline btn-sm" onclick="submitRequest(false)">QUEUE</button>
+          <button class="btn btn-sm" onclick="submitRequest(true)">PLAY NOW</button>
+        </div>
+      </div>
+
+      <!-- <50% SKIP PENALTY & DAY-BAN MONITOR -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>&lt; 50% SKIP VAULT &amp; DAY-BANS</span>
+          <span class="accent" id="bannedCount">0 TRACKS BANNED</span>
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:10px;">
+          Tracks skipped before 50% are day-banned for 24h. Repeated skips lock the track in the 14-day vault. Click <b>RESTORE</b> to pardon a track.
+        </div>
+        <div class="catalog-box" id="bannedList" style="max-height:160px;"></div>
+      </div>
+
+      <!-- VERIFIED STUDIO CATALOG -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>STATION CATALOG (<span id="catTotal">0</span> TRACKS)</span>
+          <button class="btn btn-outline btn-sm" onclick="batchPrecache()" id="precacheBtn">CACHE TOP 20</button>
+        </div>
+        <input type="text" id="catSearch" placeholder="SEARCH CATALOG BY TITLE OR ARTIST..." oninput="loadCatalog(this.value)" />
+        <div class="catalog-box" id="catalogList" style="max-height:240px;"></div>
+      </div>
+
+      <!-- LIVE DIAGNOSTIC BACKDOOR LOGS -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>SYSTEM DIAGNOSTIC TELEMETRY</span>
+          <button class="btn btn-outline btn-sm" onclick="fetchDiagnostics()">REFRESH</button>
+        </div>
+        <div id="diagStreamStats" style="font-family:var(--mono); font-size:11px; color:var(--cyan); margin-bottom:8px;"></div>
+        <div class="catalog-box" id="diagLogBox" style="max-height:160px; font-family:var(--mono); font-size:10px; color:#a0b4cc; line-height:1.4; padding:8px; white-space:pre-wrap; word-break:break-all;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let monitorAudio = document.getElementById('monitorAudio');
+    let monitorPlaying = false;
+    let currentStationId = '';
+    let remoteUplink = '';
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws/studio`);
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateStudioState(data);
+        } catch (_) {}
+      };
+      ws.onclose = () => setTimeout(connectWs, 2000);
+    }
+
+    function updateStudioState(state) {
+      if (!state) return;
+      const np = state.now_playing || {};
+      document.getElementById('nowTitle').innerText = np.title || state.title || 'BROADCASTING';
+      document.getElementById('nowArtist').innerText = np.artist || state.artist || 'FM ENGINE';
+      if (np.cover_url || state.cover_url) {
+        document.getElementById('nowCover').src = np.cover_url || state.cover_url;
+      }
+      document.getElementById('badgeMood').innerText = (np.mood || state.track_mood || 'FLOW').toUpperCase();
+      document.getElementById('badgeStation').innerText = state.card || 'STATION';
+      currentStationId = state.card_id || '';
+
+      const bpm = np.bpm || state.bpm || 128;
+      const key = np.musical_key || state.musical_key || '8A';
+      const lufs = np.lufs || -14.0;
+      document.getElementById('deckATelemetry').innerText = `${bpm} BPM • ${key} • ${lufs} LUFS`;
+      if (document.getElementById('badgeKey')) {
+        document.getElementById('badgeKey').innerText = `KEY: ${key}`;
+      }
+
+      // Progress bar
+      const el = state.elapsed_sec || 0;
+      const dur = state.duration_sec || 1;
+      const pct = Math.min(100, Math.max(0, (el / dur) * 100));
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('timeElapsed').innerText = fmtTime(el);
+      document.getElementById('timeDuration').innerText = fmtTime(dur);
+
+      // VU meters
+      document.getElementById('vuL').style.width = Math.min(100, (state.vu_left || 0) * 100) + '%';
+      document.getElementById('vuR').style.width = Math.min(100, (state.vu_right || 0) * 100) + '%';
+
+      // Deck B
+      if (state.up_next) {
+        const nextBpm = state.up_next.bpm ? ` [${state.up_next.bpm} BPM // ${state.up_next.musical_key || '8A'}]` : '';
+        document.getElementById('deckBTitle').innerText = `${state.up_next.artist} - ${state.up_next.title}${nextBpm}`;
+        if (state.in_transition) {
+          const pct = Math.round((state.transition_progress || 0) * 100);
+          document.getElementById('deckBStatus').innerText = pct >= 50 ? `DROP ACTIVE (${pct}%)` : `MIXING IN (${pct}%)`;
+          document.getElementById('deckBStatus').style.color = 'var(--neon-accent)';
+        } else {
+          document.getElementById('deckBStatus').innerText = state.up_next_ready ? 'RAM LOCKED' : 'PREPARING';
+          document.getElementById('deckBStatus').style.color = 'var(--text-muted)';
+        }
+      } else {
+        document.getElementById('deckBTitle').innerText = 'SELECTING OPTIMAL TRACK...';
+        document.getElementById('deckBStatus').innerText = 'ANALYZING';
+        document.getElementById('deckBStatus').style.color = 'var(--text-muted)';
+      }
+
+      // Uplink & Listeners
+      document.getElementById('listenerBadge').innerText = `${state.listeners || 0} LISTENERS`;
+      if (state.remote_url) {
+        remoteUplink = state.remote_url;
+        document.getElementById('uplinkBadge').innerText = `UPLINK // ${state.remote_host || 'ONLINE'}`;
+      }
+      highlightActiveStation();
+    }
+
+    function fmtTime(sec) {
+      sec = Math.floor(sec || 0);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    async function loadStations() {
+      try {
+        const res = await fetch('/api/studio/stations');
+        const data = await res.json();
+        const grid = document.getElementById('stationGrid');
+        grid.innerHTML = '';
+        (data.stations || []).forEach(st => {
+          const card = document.createElement('div');
+          card.className = `station-card ${st.card_id === currentStationId ? 'active' : ''}`;
+          card.id = `st_${st.card_id}`;
+          card.onclick = () => selectStation(st.card_id);
+          card.innerHTML = `
+            <div class="station-name">${st.title}</div>
+            <div class="station-sub">${st.subtitle || ''}</div>
+          `;
+          grid.appendChild(card);
+        });
+      } catch (_) {}
+    }
+
+    function highlightActiveStation() {
+      document.querySelectorAll('.station-card').forEach(c => c.classList.remove('active'));
+      const active = document.getElementById(`st_${currentStationId}`);
+      if (active) active.classList.add('active');
+    }
+
+    async function selectStation(id) {
+      await fetch('/api/studio/select-station', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ station_id: id })
+      });
+      currentStationId = id;
+      highlightActiveStation();
+    }
+
+    async function cycleStation() {
+      await fetch('/api/studio/cycle-mood', { method: 'POST' });
+    }
+
+    async function triggerSkip() {
+      await fetch('/api/studio/skip', { method: 'POST' });
+    }
+
+    async function flagWrongSong() {
+      if (confirm('Flag this song as incorrect/bad cover and trigger instant crossfade?')) {
+        await fetch('/api/studio/flag-wrong-song', { method: 'POST' });
+      }
+    }
+
+    async function submitRequest(playNow) {
+      const q = document.getElementById('requestInput').value.trim();
+      if (!q) return;
+      await fetch('/api/studio/request-song', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, play_now: playNow })
+      });
+      document.getElementById('requestInput').value = '';
+    }
+
+    async function loadVaultBanned() {
+      try {
+        const res = await fetch('/api/studio/vault-banned');
+        const data = await res.json();
+        const list = document.getElementById('bannedList');
+        const banned = data.banned_tracks || [];
+        document.getElementById('bannedCount').innerText = `${banned.length} TRACKS BANNED`;
+        if (banned.length === 0) {
+          list.innerHTML = '<div style="padding:10px; color:var(--muted); font-size:11px;">Zero tracks currently banned or vaulted.</div>';
+          return;
+        }
+        list.innerHTML = banned.map(b => `
+          <div class="catalog-row">
+            <div>
+              <div class="cat-title">${b.title}</div>
+              <div class="cat-artist">${b.artist} • ${b.is_vaulted ? 'VAULTED (14d)' : 'DAY-BANNED (24h)'}</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="unbanTrack('${b.track_id}')">RESTORE</button>
+          </div>
+        `).join('');
+      } catch (_) {}
+    }
+
+    async function unbanTrack(tid) {
+      await fetch('/api/studio/unban-track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track_id: tid })
+      });
+      loadVaultBanned();
+    }
+
+    async function loadCatalog(query = '') {
+      try {
+        const res = await fetch(`/api/studio/tracks?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        const list = document.getElementById('catalogList');
+        const tracks = data.tracks || [];
+        document.getElementById('catTotal').innerText = tracks.length;
+        list.innerHTML = tracks.slice(0, 50).map(t => `
+          <div class="catalog-row">
+            <div>
+              <div class="cat-title">${t.title}</div>
+              <div class="cat-artist">${t.artist} ${t.cached ? '• [VAULT CACHED]' : ''}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-outline btn-sm" onclick="queueTrack('${t.track_id}', false)">QUEUE</button>
+              <button class="btn btn-sm" onclick="queueTrack('${t.track_id}', true)">PLAY</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (_) {}
+    }
+
+    async function queueTrack(tid, playNow) {
+      await fetch('/api/studio/queue-track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track_id: tid, play_now: playNow })
+      });
+    }
+
+    async function batchPrecache() {
+      const btn = document.getElementById('precacheBtn');
+      btn.innerText = 'CACHING...';
+      btn.disabled = true;
+      await fetch('/api/studio/precache', { method: 'POST' });
+      setTimeout(() => {
+        btn.innerText = 'CACHE TOP 20';
+        btn.disabled = false;
+        loadCatalog();
+      }, 3000);
+    }
+
+    function toggleMonitor() {
+      const btn = document.getElementById('monitorBtn');
+      if (monitorPlaying) {
+        monitorAudio.pause();
+        monitorAudio.src = '';
+        monitorPlaying = false;
+        btn.innerText = 'MONITOR BROADCAST';
+        btn.classList.remove('btn');
+        btn.classList.add('btn-outline');
+      } else {
+        // Universal MP3 monitor stream with cache-busting
+        monitorAudio.src = `/stream.mp3?t=${Date.now()}`;
+        monitorAudio.play().then(() => {
+          monitorPlaying = true;
+          btn.innerText = 'MUTE MONITOR';
+          btn.classList.remove('btn-outline');
+          btn.classList.add('btn');
+        }).catch(err => {
+          alert('Could not start monitor audio: ' + err.message);
+        });
+      }
+    }
+
+    function copyUplink() {
+      if (remoteUplink) {
+        navigator.clipboard.writeText(remoteUplink);
+        alert('Copied broadcast uplink to clipboard:\n' + remoteUplink);
+      }
+    }
+
+    async function fetchDiagnostics() {
+      try {
+        const res = await fetch('/api/studio/diagnostics');
+        const data = await res.json();
+        const statEl = document.getElementById('diagStreamStats');
+        const logEl = document.getElementById('diagLogBox');
+        statEl.innerText = `BUFFER: Deck A ${Math.round(data.deck_a.remaining_sec)}s | Deck B: ${data.deck_b.ready ? 'LOADED' : 'IDLE'} (${data.deck_b.transition_style}) | VAULT: ${data.stream.cached_vault_files} tracks`;
+        const logs = data.recent_logs || [];
+        logEl.innerText = logs.slice(-25).join('\n') || 'Diagnostic buffer active. No warnings or errors logged.';
+        logEl.scrollTop = logEl.scrollHeight;
+      } catch (_) {}
+    }
+
+    // Startup
+    connectWs();
+    loadStations();
+    loadVaultBanned();
+    loadCatalog();
+    fetchDiagnostics();
+    setInterval(fetchDiagnostics, 8000);
+    setInterval(loadVaultBanned, 15000);
+  </script>
+</body>
+</html>

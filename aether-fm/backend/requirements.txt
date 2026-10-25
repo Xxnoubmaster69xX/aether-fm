@@ -1,0 +1,25 @@
+# AetherFM Backend Dependencies (Windows 10 • Python 3.11+ • CUDA 12.x for RTX 5060)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+websockets==14.1
+aiosqlite==0.20.0
+httpx==0.28.1
+pydantic==2.10.4
+
+# Audio DSP, Analysis & Loudness Normalization
+numpy>=2.0.2
+scipy>=1.13.0
+soundfile>=0.12.1
+librosa>=0.10.2.post1
+pedalboard>=0.9.14
+pyloudnorm>=0.1.1
+
+# Multi-Source Music Ingestion
+tidalapi>=0.7.7
+yt-dlp>=2025.1.15
+ytmusicapi>=1.12.0
+
+# Local AI Brain, STT (5700G CPU) & TTS (RTX 5060 GPU)
+faster-whisper>=1.1.0
+kokoro-onnx>=0.3.9
+onnxruntime-gpu[cuda,cudnn]>=1.20.0

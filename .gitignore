@@ -1,0 +1,67 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Databases & logs
+*.db
+*.sqlite
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+
+# Audio Vault / Cache files (prevent uploading 500GB of local audio files)
+*.webm
+*.m4a
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.opus
+.cache/
+data/
+audio_cache/
+
+# Large model binaries (>100MB)
+*.onnx
+*.pt
+*.pth
+*.bin
+*.index
+*.ckpt
+*.safetensors
+**/models/
+
+
+# Flutter / Android build outputs
+aether-fm/mobile_app/.dart_tool/
+aether-fm/mobile_app/.flutter-plugins
+aether-fm/mobile_app/.flutter-plugins-dependencies
+aether-fm/mobile_app/.packages
+aether-fm/mobile_app/build/
+*.apk
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sensitive environment files
+.env
+*.token

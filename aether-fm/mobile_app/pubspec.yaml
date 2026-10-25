@@ -1,0 +1,23 @@
+name: aether_fm_s24
+description: AetherFM — Madam Herta Personal AI Radio Client for Samsung Galaxy S24 Ultra
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  just_audio: ^0.9.42
+  audio_service: ^0.18.15
+  audio_session: ^0.1.21
+  web_socket_channel: ^3.0.1
+  record: ^5.1.2
+  wakelock_plus: ^1.2.8
+
+dependency_overrides:
+  record_linux: ^1.2.1
+
+flutter:
+  uses-material-design: true
