@@ -34,12 +34,14 @@ class ProDJRadioMixer:
 
         # Deck A (Currently Playing Track)
         self.deck_a_buffer: np.ndarray = np.zeros((0, CHANNELS), dtype=np.float32)
+        self.deck_a_stems: Optional[Dict[str, np.ndarray]] = None
         self.deck_a_track: Optional[Dict[str, Any]] = None
         self.deck_a_total_samples: int = 0
         self.deck_a_played_samples: int = 0
 
         # Deck B (Cued Next & Pre-Loaded in RAM)
         self.deck_b_buffer: np.ndarray = np.zeros((0, CHANNELS), dtype=np.float32)
+        self.deck_b_stems: Optional[Dict[str, np.ndarray]] = None
         self.deck_b_track: Optional[Dict[str, Any]] = None
 
         # Crossfade / Transition State
@@ -291,8 +293,9 @@ class ProDJRadioMixer:
         audio_data: np.ndarray,
         track_meta: Dict[str, Any],
         crossfade_style: str = "club_eq_crossover_9s",
+        stems: Optional[Dict[str, np.ndarray]] = None,
     ) -> None:
-        """Loads and cues incoming track into Deck B with silence trim."""
+        """Loads and cues incoming track into Deck B with silence trim and optional stems."""
         norm_pcm = audio_data
 
         # Trim digital silence onset using intro cue point if present
@@ -301,8 +304,13 @@ class ProDJRadioMixer:
             trim_samples = int(min(cue_in, 6.0) * SAMPLE_RATE)
             if len(norm_pcm) > trim_samples + SAMPLE_RATE * 10:
                 norm_pcm = norm_pcm[trim_samples:]
+                if stems:
+                    for k in list(stems.keys()):
+                        if stems[k] is not None and len(stems[k]) > trim_samples:
+                            stems[k] = stems[k][trim_samples:]
 
         self.deck_b_buffer = norm_pcm
+        self.deck_b_stems = stems
         self.deck_b_track = track_meta
         self.transition_style = crossfade_style
 
@@ -323,9 +331,11 @@ class ProDJRadioMixer:
         # 1. Deck A empty -> promote Deck B immediately
         if len(self.deck_a_buffer) < BLOCK_SIZE and len(self.deck_b_buffer) >= BLOCK_SIZE:
             self.deck_a_buffer = self.deck_b_buffer
+            self.deck_a_stems = self.deck_b_stems
             self.deck_a_total_samples = len(self.deck_a_buffer)
             self.deck_a_played_samples = 0
             self.deck_b_buffer = np.zeros((0, CHANNELS), dtype=np.float32)
+            self.deck_b_stems = None
             promoted_track = self.deck_b_track
             self.deck_a_track = self.deck_b_track
             self.deck_b_track = None
@@ -388,15 +398,39 @@ class ProDJRadioMixer:
             self.transition_progress += 1.0 / float(self.transition_duration_blocks)
             p = min(1.0, self.transition_progress)
 
-            out_a = self.dsp.process_deck_a_transition(chunk_a, p, self.transition_style)
-            out_b = self.dsp.process_deck_b_transition(chunk_b, p, self.transition_style)
-            music_bus = out_a + out_b
+            use_stems = (
+                self.deck_a_stems is not None
+                and self.deck_b_stems is not None
+                and len(self.deck_a_stems.get("instrumental", [])) >= BLOCK_SIZE
+                and len(self.deck_b_stems.get("instrumental", [])) >= BLOCK_SIZE
+            )
+
+            if use_stems:
+                a_inst = self.deck_a_stems["instrumental"][:BLOCK_SIZE]
+                self.deck_a_stems["instrumental"] = self.deck_a_stems["instrumental"][BLOCK_SIZE:]
+                a_vox = self.deck_a_stems["vocals"][:BLOCK_SIZE]
+                self.deck_a_stems["vocals"] = self.deck_a_stems["vocals"][BLOCK_SIZE:]
+
+                b_inst = self.deck_b_stems["instrumental"][:BLOCK_SIZE]
+                self.deck_b_stems["instrumental"] = self.deck_b_stems["instrumental"][BLOCK_SIZE:]
+                b_vox = self.deck_b_stems["vocals"][:BLOCK_SIZE]
+                self.deck_b_stems["vocals"] = self.deck_b_stems["vocals"][BLOCK_SIZE:]
+
+                music_bus = self.dsp.process_stem_transition(
+                    a_inst, a_vox, b_inst, b_vox, p, self.transition_style
+                )
+            else:
+                out_a = self.dsp.process_deck_a_transition(chunk_a, p, self.transition_style)
+                out_b = self.dsp.process_deck_b_transition(chunk_b, p, self.transition_style)
+                music_bus = out_a + out_b
 
             if p >= 1.0:
                 self.deck_a_buffer = self.deck_b_buffer
+                self.deck_a_stems = self.deck_b_stems
                 self.deck_a_total_samples = len(self.deck_a_buffer) + BLOCK_SIZE
                 self.deck_a_played_samples = BLOCK_SIZE
                 self.deck_b_buffer = np.zeros((0, CHANNELS), dtype=np.float32)
+                self.deck_b_stems = None
                 promoted_track = self.deck_b_track
                 self.deck_a_track = self.deck_b_track
                 self.deck_b_track = None

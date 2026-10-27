@@ -34,6 +34,7 @@ from ai_booth.stt_caller import BoothCallTranscriber
 from ai_booth.tts_voice import HertaVoiceSynthesizer, VOICE_PROFILES
 from audio_engine.beat_analyzer import analyze_track_cues
 from audio_engine.mixer import ThreeDeckRadioMixer
+from audio_engine.stem_separator import separate_and_cache_stems, load_stems
 from config import AUTH_TOKEN, BASE_DIR, PORT, TAILSCALE_IP
 from database.db_manager import DatabaseManager, compute_track_mood
 from ingestion.apple_music_sync import sync_apple_music_playlist_url, sync_apple_music_txt
@@ -362,6 +363,15 @@ async def _prepare_track_assets(
                 logger.warning(f"Time-stretch beat matching skipped: {e}")
 
     await db.upsert_track(chosen_track)
+
+    # 4. Trigger asynchronous background GPU stem separation on RTX 5060
+    try:
+        asyncio.create_task(
+            asyncio.to_thread(separate_and_cache_stems, audio_path, chosen_track["track_id"])
+        )
+    except Exception:
+        pass
+
     return normalized_pcm
 
 
@@ -468,8 +478,12 @@ async def _prefetch_next_track(
         # Fetch transition style from active station
         crossfade_style = active_card.get("crossfade_style", "club_eq_crossover_9s") if active_card else "club_eq_crossover_9s"
 
+        # Check for pre-separated stems in the vault
+        stems = await asyncio.to_thread(load_stems, chosen_track["track_id"])
+
         if len(mixer.deck_a_buffer) == 0 or play_immediately:
             mixer.deck_a_buffer = stereo_pcm
+            mixer.deck_a_stems = stems
             mixer.deck_a_total_samples = len(stereo_pcm)
             mixer.deck_a_played_samples = 0
             mixer.deck_a_track = chosen_track
@@ -481,6 +495,7 @@ async def _prefetch_next_track(
                 stereo_pcm,
                 track_meta=chosen_track,
                 crossfade_style=crossfade_style,
+                stems=stems,
             )
             await broadcast_to_all_clients(build_state_snapshot("UP_NEXT"))
 

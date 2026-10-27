@@ -147,6 +147,40 @@ class BroadcastDSPChain:
             gain = float(np.sin(min(1.0, p * 1.1) * (np.pi / 2.0)))
             return (filtered * gain).astype(np.float32)
 
+    def process_stem_transition(
+        self,
+        chunk_a_inst: np.ndarray,
+        chunk_a_vox: np.ndarray,
+        chunk_b_inst: np.ndarray,
+        chunk_b_vox: np.ndarray,
+        progress: float,
+        style: str = "club_eq_crossover_9s",
+    ) -> np.ndarray:
+        """
+        AI DJ Stem Mashup Transition:
+        1. Deck A vocals smoothly fade out before the drop (0.0 -> 0.35) so vocals never clash.
+        2. Deck A instrumental plays full bass then sweeps out on the downbeat drop.
+        3. Deck B instrumental fades in under high-pass isolator, dropping sub-bass at p=0.50.
+        4. Deck B vocals enter cleanly after the drop (0.50 -> 0.85).
+        """
+        p = float(np.clip(progress, 0.0, 1.0))
+
+        # Deck A vocals fade out early so vocals never talk over each other
+        vox_a_gain = max(0.0, 1.0 - (p / 0.35))
+        a_vox_out = chunk_a_vox * vox_a_gain
+
+        # Deck A instrumental high-pass filter sweep after drop (p >= 0.50)
+        a_inst_out = self.process_deck_a_transition(chunk_a_inst, p, style)
+
+        # Deck B instrumental high-pass bass isolation before drop (p < 0.50)
+        b_inst_out = self.process_deck_b_transition(chunk_b_inst, p, style)
+
+        # Deck B vocals enter cleanly after drop (0.50 -> 1.0)
+        vox_b_gain = min(1.0, max(0.0, (p - 0.45) / 0.40))
+        b_vox_out = chunk_b_vox * vox_b_gain
+
+        return (a_vox_out + a_inst_out + b_vox_out + b_inst_out).astype(np.float32)
+
     def normalize_and_limit_master(self, master_chunk: np.ndarray) -> np.ndarray:
         """Stateful master bus limiter preserving dynamic impact."""
         processed = self.master_board(master_chunk, self.sample_rate, reset=False)
