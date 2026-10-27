@@ -601,6 +601,30 @@ class HertaDJBrain:
                     return track_dict
         except Exception:
             pass
+
+        # 100% Offline Fallback: find related tracks directly in the local SQLite vault
+        try:
+            from database.db_manager import DatabaseManager
+            db_inst = DatabaseManager()
+            all_local = await db_inst.get_all_tracks(limit=800)
+            for art in [target_artist] + related_pool:
+                norm_art = normalize_primary_artist(art)
+                match = next(
+                    (
+                        t for t in all_local
+                        if t["track_id"] not in exclude_ids
+                        and normalize_primary_artist(t["artist"]) == norm_art
+                    ),
+                    None,
+                )
+                if match:
+                    match_copy = dict(match)
+                    match_copy["related_to_artist"] = seed_artist
+                    match_copy["is_discovery"] = True
+                    match_copy["mood"] = compute_track_mood(match_copy)
+                    return match_copy
+        except Exception:
+            pass
         return None
 
     def _build_rich_song_introduction(
@@ -796,6 +820,197 @@ class HertaDJBrain:
             pass
         return fallback_line
 
+    def _recent_artist_norms(self, recent_tracks: List[str]) -> List[str]:
+        artists = []
+        for entry in recent_tracks[-14:]:
+            if " - " in entry:
+                artist_raw = entry.split(" - ", 1)[0]
+                artists.append(normalize_primary_artist(artist_raw))
+            else:
+                artists.append(normalize_primary_artist(entry))
+        return artists
+
+    def _score_candidate(
+        self,
+        track: Dict[str, Any],
+        recent_tracks: List[str],
+        desired: Optional[Dict[str, Any]] = None,
+    ) -> float:
+        """
+        Multi-factor algorithmic scoring engine:
+        1. Favorite boost preference
+        2. Station mood match
+        3. Continuous energy proximity (|E_track - E_target|)
+        4. Genre match bonus
+        5. Discovery / Knowledge-Graph relationship bonus
+        6. Duration sanity curve (sweet spot 120s - 360s)
+        7. Decaying anti-repeat artist penalty (-1.25 / (i + 1))
+        8. Anti-repeat song penalty (-2.0 / (i + 1))
+        """
+        desired = desired or {}
+        score = 0.0
+
+        # 1. Favorite boost
+        try:
+            favorite_boost = float(track.get("favorite_boost", 1.0) or 1.0)
+            score += (favorite_boost - 1.0) * 10.0
+        except Exception:
+            pass
+
+        # 2. Mood match
+        desired_mood = (desired.get("mood") or "").lower().strip()
+        track_mood = (track.get("mood") or compute_track_mood(track)).lower().strip()
+        if desired_mood and (desired_mood in track_mood or track_mood in desired_mood):
+            score += 2.5
+
+        # 3. Energy match
+        desired_energy = desired.get("energy")
+        try:
+            track_energy = float(track.get("energy_score", 0.6) or 0.6)
+        except Exception:
+            track_energy = 0.6
+
+        if desired_energy is None:
+            score += 0.25
+        else:
+            try:
+                desired_energy = float(desired_energy)
+                score += max(0.0, 1.0 - abs(track_energy - desired_energy) * 1.5)
+            except Exception:
+                score += 0.25
+
+        # 4. Genre match
+        desired_genre = (desired.get("genre") or "").lower().strip()
+        genres = [str(g).lower().strip() for g in track.get("genres", [])]
+        if desired_genre:
+            if any(desired_genre in g for g in genres):
+                score += 2.0
+            else:
+                score -= 0.5
+
+        # 5. Discovery & Knowledge Graph relationship bonus
+        if track.get("is_discovery"):
+            score += 0.65
+        if track.get("related_to_artist"):
+            score += 0.45
+
+        # 6. Duration sanity (sweet spot 120s - 360s)
+        try:
+            duration_sec = float(track.get("duration_sec", 0.0) or 0.0)
+            if 120.0 <= duration_sec <= 360.0:
+                score += 0.35
+            elif duration_sec > 420.0:
+                score -= 0.35
+            elif duration_sec < 90.0:
+                score -= 0.50
+        except Exception:
+            pass
+
+        # 7. Progressive anti-repeat artist penalty (decaying with recency)
+        artist_norm = normalize_primary_artist(track.get("artist", ""))
+        recent_artists = self._recent_artist_norms(recent_tracks)
+        for i, recent_artist in enumerate(reversed(recent_artists)):
+            if recent_artist and recent_artist == artist_norm:
+                score -= 1.25 / (i + 1)
+
+        # 8. Anti-repeat song penalty
+        title = (track.get("title") or "").lower().strip()
+        artist = (track.get("artist") or "").lower().strip()
+        needle = f"{artist} - {title}"
+        for i, recent_entry in enumerate(reversed(recent_tracks[-14:])):
+            if recent_entry.lower().strip() == needle:
+                score -= 2.0 / (i + 1)
+
+        return score
+
+    def _rank_candidates(
+        self,
+        candidates: List[Dict[str, Any]],
+        recent_tracks: List[str],
+        desired: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        scored = []
+        for track in candidates:
+            try:
+                s = self._score_candidate(track, recent_tracks, desired)
+            except Exception:
+                s = 0.0
+            scored.append((s, track))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [track for _, track in scored]
+
+    async def parse_voice_request_intent(self, user_transcript: str) -> Dict[str, Any]:
+        """
+        Extracts structured intent from a spoken voice request:
+        Returns: {"artist": str or None, "title": str or None, "genre": str or None, "mood": str or None, "energy": float or None}
+        Tries local Ollama LLM with strict 1.8s timeout, falling back to rule-based parsing.
+        """
+        raw = user_transcript.strip().lower()
+        default_intent = {"artist": None, "title": None, "genre": None, "mood": None, "energy": None}
+
+        # Try LLM parser if Ollama is online
+        if self._ollama_online:
+            prompt = (
+                "You are an AI radio request parser. Extract structured music search filters from the request.\n"
+                "Respond ONLY with a valid JSON object with keys: 'artist', 'title', 'genre', 'mood', 'energy' (0.0 to 1.0, or null).\n"
+                f'Request: "{user_transcript}"\n'
+                "JSON:"
+            )
+            try:
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    resp = await client.post(
+                        f"{self.base_url}/api/generate",
+                        json={
+                            "model": self.model,
+                            "prompt": prompt,
+                            "stream": False,
+                            "format": "json",
+                            "keep_alive": OLLAMA_KEEP_ALIVE_ACTIVE,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        parsed = json.loads(resp.json().get("response", "{}"))
+                        if isinstance(parsed, dict) and any(parsed.values()):
+                            return {
+                                "artist": parsed.get("artist"),
+                                "title": parsed.get("title"),
+                                "genre": parsed.get("genre"),
+                                "mood": parsed.get("mood"),
+                                "energy": float(parsed["energy"]) if parsed.get("energy") is not None else None,
+                            }
+            except Exception:
+                pass
+
+        # Robust rule-based regex fallback
+        intent = dict(default_intent)
+        for genre in ["rock", "metal", "country", "j-pop", "j-core", "edm", "house", "pop", "ost", "soundtrack"]:
+            if genre in raw:
+                intent["genre"] = genre
+                break
+
+        if any(w in raw for w in ["calm", "relax", "chill", "slow", "ambient", "sleep"]):
+            intent["mood"] = "chill"
+            intent["energy"] = 0.3
+        elif any(w in raw for w in ["hype", "energetic", "intense", "heavy", "fast", "drop", "overdrive"]):
+            intent["mood"] = "overdrive"
+            intent["energy"] = 0.88
+
+        # Extract "by [Artist]"
+        if " by " in raw:
+            parts = raw.split(" by ", 1)
+            intent["title"] = parts[0].replace("play", "").strip() or None
+            intent["artist"] = parts[1].strip() or None
+        elif raw.startswith("play "):
+            query = raw[5:].strip()
+            norm_q = normalize_primary_artist(query)
+            if norm_q in ARTIST_KNOWLEDGE_GRAPH:
+                intent["artist"] = query
+            else:
+                intent["title"] = query
+
+        return intent
+
     async def select_next_track_and_script(
         self,
         candidates: List[Dict[str, Any]],
@@ -805,9 +1020,7 @@ class HertaDJBrain:
         telemetry_context: Optional[Dict[str, Any]] = None,
         forced_track: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        if forced_track:
-            candidates = [forced_track]
-        if not candidates:
+        if not candidates and not forced_track:
             return {
                 "selected_track_id": "",
                 "transition_style": "beat_blend_8s",
@@ -815,11 +1028,35 @@ class HertaDJBrain:
                 "dj_script": "Catalog buffer is currently empty.",
             }
 
-        winner = (
-            forced_track
-            if forced_track
-            else random.choice(candidates[: min(6, len(candidates))])
-        )
+        if forced_track:
+            winner = forced_track
+        else:
+            desired = {
+                "mood": (active_card or {}).get("mood", "") or (active_card or {}).get("title", ""),
+                "energy": (active_card or {}).get("energy_score"),
+                "genre": "",
+            }
+
+            if telemetry_context:
+                for k in ("mood", "energy", "genre"):
+                    if telemetry_context.get(k):
+                        desired[k] = telemetry_context[k]
+
+            ranked = self._rank_candidates(candidates, recent_tracks, desired)
+            if not ranked:
+                return {
+                    "selected_track_id": "",
+                    "transition_style": "beat_blend_8s",
+                    "emotion_tag": "aloof",
+                    "dj_script": "No playable tracks found.",
+                }
+
+            # 85% pick the highest scored track, 15% exploration jitter from top pool
+            top_pool = ranked[: min(4, len(ranked))]
+            if random.random() < 0.15:
+                winner = random.choice(top_pool)
+            else:
+                winner = top_pool[0]
 
         if not self.dj_enabled:
             return {
@@ -850,12 +1087,17 @@ class HertaDJBrain:
     async def handle_live_caller_request(
         self, caller_transcript: str, available_cards: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
+        intent = await self.parse_voice_request_intent(caller_transcript)
+        query = intent.get("title") or intent.get("artist") or caller_transcript
+        char_name = self.persona_manager.get_character().get("name", "HOST")
+
         return {
             "action": "search_track",
-            "search_query": caller_transcript,
+            "search_query": query,
+            "intent": intent,
             "target_card_id": "",
             "emotion_tag": "smug",
-            "dj_script": f"Copy that on the studio line. Queuing {caller_transcript} onto the next deck.",
+            "dj_script": f"Got your request on the studio line. Locating {query} for the upcoming deck transition.",
         }
 
     async def unload_vram_for_sleep(self) -> None:

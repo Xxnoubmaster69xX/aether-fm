@@ -380,14 +380,29 @@ class DatabaseManager:
                 if cand_mood in disliked_mood_set or cand_mood in self.recent_early_skipped_moods:
                     mood_adj -= 2.2
 
+                # Continuous Energy Match (|E_track - E_target|)
+                cand_energy = float(row["energy_score"] or 0.6)
+                energy_match = max(0.0, 1.0 - abs(cand_energy - self.session_target_energy) * 1.5)
+
+                # Duration Sanity (sweet spot 120s - 360s)
+                dur = float(row["duration_sec"] or 210.0)
+                dur_score = 0.35 if 120.0 <= dur <= 360.0 else (-0.35 if dur > 420.0 else (-0.50 if dur < 90.0 else 0.0))
+
+                # Favorite Boost
+                fav_boost = float(row["favorite_boost"] or 1.0)
+                fav_score = (fav_boost - 1.0) * 10.0
+
                 total_score = (
                     (genre_score * 0.35)
                     + (b_bpm_match * 0.20)
+                    + (energy_match * 0.25)
                     + (r_completion * 0.15)
                     + key_bonus
                     + mood_adj
+                    + dur_score
+                    + fav_score
                     + eps_discovery
-                ) * min(1.3, float(row["favorite_boost"]))
+                )
 
                 cand_dict["score"] = round(total_score, 4)
                 scored_candidates.append(cand_dict)
